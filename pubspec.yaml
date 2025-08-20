@@ -1,0 +1,41 @@
+name: camtech_assessment_test
+description: "A new Flutter project."
+publish_to: 'none' 
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.3 <4.0.0' # It's good practice to have an upper bound
+
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_preferences: ^2.2.3
+
+  # The following adds the Cupertino Icons font to your application.
+  # Use with the CupertinoIcons class for iOS style icons.
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1
+  intl: ^0.20.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  
+  flutter_lints: ^3.0.0
+
+flutter:
+  # The following line ensures that the Material Icons font is
+  # included with your application, so that you can use the icons in
+  # the material Icons class.
+  uses-material-design: true
+
+  # To add assets to your application, add an assets section, like this:
+  assets:
+     - assets/quizz-welcome-image.png
+     - assets/math.jpg
+     - assets/history.jpg
+     - assets/friend.png
+     - assets/avatar.png
+     - assets/general_knowledge.jpg
+     - assets/personality_test.jpg
+     - assets/data/questions.json
