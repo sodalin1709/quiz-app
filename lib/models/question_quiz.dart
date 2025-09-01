@@ -1,111 +1,74 @@
 // models/question_quiz.dart
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/language_provider.dart';
+
 class QuestionQuiz {
-  int? index;
-  String? question;
-  List<String> options = [];
-  String? answer;
+  final String questionEn;
+  final String questionKh;
+  final String questionZh;
+  final List<String> optionsEn;
+  final List<String> optionsKh;
+  final List<String> optionsZh;
+  final String? answer;
   String? customerAnswer;
+  int? index;
 
-  QuestionQuiz({this.question, required this.options, this.answer});
+  QuestionQuiz({
+    required this.questionEn,
+    required this.questionKh,
+    required this.questionZh,
+    required this.optionsEn,
+    required this.optionsKh,
+    required this.optionsZh,
+    required this.answer,
+    this.customerAnswer,
+    this.index,
+  });
 
-  // MODIFIED: Added index and customerAnswer
-  QuestionQuiz.fromJson(Map<String, dynamic> json) {
-    index = json['index'];
-    question = json['question'];
-    options = json['options'].cast<String>();
-    answer = json['answer'];
-    customerAnswer = json['customerAnswer'];
+  /// Returns the question text in the currently selected language.
+  String getQuestion(BuildContext context) {
+    final lang = Provider.of<LanguageProvider>(context, listen: false).currentLanguage;
+    switch (lang) {
+      case Language.en:
+        return questionEn;
+      case Language.kh:
+        return questionKh;
+      case Language.zh:
+        return questionZh;
+    }
   }
 
-  // MODIFIED: Added index and customerAnswer
-  Map<String, dynamic> toJson() {
-    final Map<String, dynamic> data = <String, dynamic>{};
-    data['index'] = index;
-    data['question'] = question;
-    data['options'] = options;
-    data['answer'] = answer;
-    data['customerAnswer'] = customerAnswer;
-    return data;
+  /// Returns the list of options in the currently selected language.
+  List<String> getOptions(BuildContext context) {
+    final lang = Provider.of<LanguageProvider>(context, listen: false).currentLanguage;
+    switch (lang) {
+      case Language.en:
+        return optionsEn;
+      case Language.kh:
+        return optionsKh;
+      case Language.zh:
+        return optionsZh;
+    }
   }
+
+  factory QuestionQuiz.fromJson(Map<String, dynamic> json) {
+    return QuestionQuiz(
+      questionEn: json['questionEn'] ?? '',
+      questionKh: json['questionKh'] ?? '',
+      questionZh: json['questionZh'] ?? '',
+      optionsEn: List<String>.from(json['optionEn'] ?? []),
+      optionsKh: List<String>.from(json['optionKh'] ?? []),
+      optionsZh: List<String>.from(json['optionZh'] ?? []),
+      answer: json['answerCode'],
+      customerAnswer: json['customerAnswer'],
+      index: json['index'],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'questionEn': questionEn, 'questionKh': questionKh, 'questionZh': questionZh,
+    'optionEn': optionsEn, 'optionKh': optionsKh, 'optionZh': optionsZh,
+    'answerCode': answer, 'customerAnswer': customerAnswer, 'index': index,
+  };
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-// // models/question_quiz.dart
-// class QuestionQuiz {
-//   int? index;
-//   String? question;
-//   List<String> options = [];
-//   String? answer;
-//   String? customerAnswer;
-
-//   QuestionQuiz({this.question, required this.options, this.answer});
-
-//   QuestionQuiz.fromJson(Map<String, dynamic> json) {
-//     question = json['question'];
-//     options = json['options'].cast<String>();
-//     answer = json['answer'];
-//   }
-
-//   Map<String, dynamic> toJson() {
-//     final Map<String, dynamic> data = Map<String, dynamic>();
-//     data['question'] = this.question;
-//     data['options'] = this.options;
-//     data['answer'] = this.answer;
-//     return data;
-//   }
-// }
-
-
-
-
-// import 'dart:convert';
-
-// import 'package:flutter/services.dart';
-
-// class QuestionQuiz {
-//   int? index;
-//   String? question;
-//   List<String> options = [];
-//   String? answer;
-//   String? customerAnwser;
-
-//   QuestionQuiz({this.question, required this.options, this.answer});
-
-//   QuestionQuiz.fromJson(Map<String, dynamic> json) {
-//     question = json['question'];
-//     options = json['options'].cast<String>();
-//     answer = json['answer'];
-//   }
-
-//   Map<String, dynamic> toJson() {
-//     final Map<String, dynamic> data = Map<String, dynamic>();
-//     data['question'] = this.question;
-//     data['options'] = this.options;
-//     data['answer'] = this.answer;
-//     return data;
-//   }
-
-//   static Future<List<QuestionQuiz>> loadData() async {
-//     String strQuestions = await rootBundle.loadString(
-//       'assets/data/questions.json',
-//     );
-    
-//     List<dynamic> questions = jsonDecode(strQuestions);
-
-//     List<QuestionQuiz> respQuestions =
-//         questions.map((q) => QuestionQuiz.fromJson(q)).toList();
-
-//     return respQuestions;
-//   }
-// }

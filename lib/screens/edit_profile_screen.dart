@@ -1,11 +1,13 @@
 // screens/edit_profile_screen.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../services/auth_service.dart';
-import '../models/user.dart';
+import '../services/profile_service.dart';
+import '../models/user_profile.dart';
 
 class EditProfileScreen extends StatefulWidget {
-  const EditProfileScreen({super.key});
+  final UserProfile userProfile;
+
+  const EditProfileScreen({super.key, required this.userProfile});
 
   @override
   State<EditProfileScreen> createState() => _EditProfileScreenState();
@@ -13,61 +15,47 @@ class EditProfileScreen extends StatefulWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _ageController = TextEditingController();
-  final _schoolController = TextEditingController();
-  String _selectedGender = 'Male';
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _loadUserData();
+    _firstNameController.text = widget.userProfile.firstName;
+    _lastNameController.text = widget.userProfile.lastName;
   }
 
-  void _loadUserData() {
-    final user = AuthService.currentUser;
-    if (user != null) {
-      _nameController.text = user.name;
-      _emailController.text = user.email;
-      _ageController.text = user.age.toString();
-      _schoolController.text = user.school;
-      _selectedGender = user.gender;
+  Future<void> _saveProfile() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
     }
-  }
 
-  void _saveProfile() {
-    if (_formKey.currentState!.validate()) {
-      final user = AuthService.currentUser;
-      if (user != null) {
-        final updatedUser = User(
-          name: _nameController.text,
-          email: user.email, // Email is not editable
-          age: int.tryParse(_ageController.text) ?? user.age,
-          school: _schoolController.text,
-          gender: _selectedGender,
-          totalTestsTaken: user.totalTestsTaken,
-          totalScore: user.totalScore,
-          leagueRanking: user.leagueRanking,
-          profilePicture: user.profilePicture,
-        );
+    setState(() => _isLoading = true);
 
-        AuthService.updateProfile(updatedUser);
+    final success = await ProfileService.updateProfile(
+      _firstNameController.text,
+      _lastNameController.text,
+    );
+    
+    if (!mounted) return;
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile updated successfully')),
-        );
-        Navigator.of(context).pop();
-      }
+    setState(() => _isLoading = false);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(success ? 'Profile updated successfully' : 'Failed to update profile')),
+    );
+
+    if (success) {
+      // Pass a boolean back to indicate success
+      Navigator.of(context).pop(true);
     }
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
-    _ageController.dispose();
-    _schoolController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     super.dispose();
   }
 
@@ -85,7 +73,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          'Personal Info',
+          'Edit Profile',
           style: GoogleFonts.poppins(
             color: Colors.black87,
             fontWeight: FontWeight.bold,
@@ -101,16 +89,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               children: [
                 _buildAvatar(),
                 const SizedBox(height: 30),
-                _buildTextField(label: 'Full Name', controller: _nameController),
-                _buildTextField(label: 'Email', controller: _emailController, enabled: false),
-                _buildTextField(label: 'Age', controller: _ageController, keyboardType: TextInputType.number),
-                _buildTextField(label: 'School', controller: _schoolController),
-                _buildGenderDropdown(),
+                _buildTextField(label: 'First Name', controller: _firstNameController),
+                _buildTextField(label: 'Last Name', controller: _lastNameController),
                 const SizedBox(height: 40),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _saveProfile,
+                    onPressed: _isLoading ? null : _saveProfile,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
                       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -118,14 +103,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: Text(
-                      'Save Changes',
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
+                    child: _isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : Text(
+                            'Save Changes',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
                   ),
                 ),
               ],
@@ -137,6 +124,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Widget _buildAvatar() {
+    // This is a UI widget and doesn't need API logic
     return Stack(
       children: [
         const CircleAvatar(
@@ -165,20 +153,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Widget _buildTextField({
     required String label,
     required TextEditingController controller,
-    bool enabled = true,
-    TextInputType keyboardType = TextInputType.text,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10.0),
       child: TextFormField(
         controller: controller,
-        enabled: enabled,
-        keyboardType: keyboardType,
         decoration: InputDecoration(
           labelText: label,
           labelStyle: GoogleFonts.poppins(color: Colors.grey.shade600),
           filled: true,
-          fillColor: const Color.fromARGB(255, 255, 255, 255),
+          fillColor: Colors.white,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide.none,
@@ -188,41 +172,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             borderSide: const BorderSide(color: Color.fromRGBO(106, 90, 224, 1)),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildGenderDropdown() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10.0),
-      child: DropdownButtonFormField<String>(
-        value: _selectedGender,
-        decoration: InputDecoration(
-          labelText: 'Gender',
-          labelStyle: GoogleFonts.poppins(color: Colors.grey.shade600),
-          filled: true,
-          fillColor: const Color.fromARGB(255, 255, 255, 255),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-        ),
-        // MODIFIED: Added styling to the dropdown menu
-        borderRadius: BorderRadius.circular(12),
-        elevation: 4,
-        dropdownColor: Colors.white,
-        items: ['Male', 'Female', 'Other']
-            .map((gender) => DropdownMenuItem(
-                  value: gender,
-                  child: Text(gender, style: GoogleFonts.poppins()),
-                ))
-            .toList(),
-        onChanged: (value) {
-          if (value != null) {
-            setState(() {
-              _selectedGender = value;
-            });
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'Please enter a value';
           }
+          return null;
         },
       ),
     );

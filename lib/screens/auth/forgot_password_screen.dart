@@ -12,34 +12,72 @@ class ForgotPasswordScreen extends StatefulWidget {
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _otpController = TextEditingController();
+  final _passwordController = TextEditingController();
+  
+  final String _countryCode = '855';
+
   bool _isLoading = false;
+  bool _isOtpSending = false;
+  bool _otpSent = false; // To switch between UI states
+
+  Future<void> _sendOtp() async {
+    // Only validate the phone number field for this step
+    if (_phoneController.text.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter a phone number.')),
+        );
+        return;
+    }
+    
+    setState(() => _isOtpSending = true);
+    
+    final success = await AuthService.sendOtp(_countryCode, _phoneController.text);
+    
+    if (!mounted) return;
+    
+    setState(() {
+      _isOtpSending = false;
+      if(success) {
+        _otpSent = true; // Switch UI to show OTP and password fields
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('OTP sent successfully!')),
+        );
+      } else {
+         ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to send OTP. Please try again.')),
+        );
+      }
+    });
+  }
 
   Future<void> _resetPassword() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
-    bool success = await AuthService.resetPassword(_emailController.text);
+    bool success = await AuthService.resetPassword(
+      _countryCode,
+      _phoneController.text,
+      _otpController.text,
+      _passwordController.text,
+    );
 
-    if(!mounted) return;
+    if (!mounted) return;
 
-    setState(() {
-      _isLoading = false;
-    });
+    setState(() => _isLoading = false);
 
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password reset email sent!')),
+        const SnackBar(content: Text('Password has been reset successfully!')),
       );
       Navigator.pop(context);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to send reset email')),
+        const SnackBar(content: Text('Failed to reset password. Check OTP and try again.')),
       );
     }
   }
@@ -77,42 +115,24 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Enter your email and we\'ll send you a link to get back into your account.',
+                  _otpSent
+                      ? 'Enter the OTP from your phone and your new password.'
+                      : 'Enter your phone number and we\'ll send you an OTP to reset your password.',
                   style: GoogleFonts.poppins(
                     fontSize: 16,
                     color: Colors.grey.shade600,
                   ),
                 ),
                 const SizedBox(height: 40),
-                TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    labelText: 'Email',
-                    labelStyle: GoogleFonts.poppins(color: Colors.grey.shade600),
-                    filled: true,
-                    fillColor: const Color.fromARGB(255, 255, 255, 255),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: primaryColor),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty || !value.contains('@')) {
-                      return 'Please enter a valid email';
-                    }
-                    return null;
-                  },
-                ),
+                
+                // Fields are built based on whether OTP has been sent
+                ..._buildFormFields(),
+                
                 const SizedBox(height: 30),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _isLoading ? null : _resetPassword,
+                    onPressed: (_isLoading || _isOtpSending) ? null : (_otpSent ? _resetPassword : _sendOtp),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
                       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -120,10 +140,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: _isLoading
+                    child: (_isLoading || _isOtpSending)
                         ? const CircularProgressIndicator(color: Colors.white)
                         : Text(
-                            'Send Reset Link',
+                            _otpSent ? 'Reset Password' : 'Send OTP',
                             style: GoogleFonts.poppins(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -136,6 +156,59 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  // Helper to build form fields dynamically
+  List<Widget> _buildFormFields() {
+    if (!_otpSent) {
+      return [
+        _buildTextField(label: 'Phone Number', controller: _phoneController, keyboardType: TextInputType.phone)
+      ];
+    } else {
+      return [
+        _buildTextField(label: 'Phone Number', controller: _phoneController, enabled: false),
+        _buildTextField(label: 'OTP Code', controller: _otpController, keyboardType: TextInputType.number),
+        _buildTextField(label: 'New Password', controller: _passwordController, obscureText: true),
+      ];
+    }
+  }
+
+  Widget _buildTextField({
+    required String label,
+    required TextEditingController controller,
+    bool obscureText = false,
+    TextInputType keyboardType = TextInputType.text,
+    bool enabled = true,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: TextFormField(
+        controller: controller,
+        obscureText: obscureText,
+        keyboardType: keyboardType,
+        enabled: enabled,
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: GoogleFonts.poppins(color: Colors.grey.shade600),
+          filled: true,
+          fillColor: enabled ? Colors.white : Colors.grey.shade200,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color.fromRGBO(106, 90, 224, 1)),
+          ),
+        ),
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'Please enter a value';
+          }
+          return null;
+        },
       ),
     );
   }

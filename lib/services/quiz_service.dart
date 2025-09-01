@@ -1,84 +1,73 @@
+// services/quiz_service.dart
 import 'dart:convert';
-import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/quiz_category.dart';
 import '../models/question_quiz.dart';
 import '../models/test_result.dart';
+import 'auth_service.dart';
 
 class QuizService {
-  static List<TestResult> _testHistory = [];
-  static const String _historyKey = 'test_history';
+  static const String _baseUrl = 'https://quiz-api.camtech-dev.online';
+  
+  // This list will hold the test history in memory after being loaded from local storage.
+  static List<TestResult> testHistory = [];
 
-  static List<TestResult> get testHistory => _testHistory;
+  /// Fetches questions for a category by getting the category's detail from the API.
+  static Future<List<QuestionQuiz>> getQuestions(int categoryId) async {
+    final token = await AuthService.getToken();
+    if (token == null) return [];
 
-  /// Loads the test history list from the device's persistent storage.
-  static Future<void> loadHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (prefs.containsKey(_historyKey)) {
-      final historyData = prefs.getString(_historyKey)!;
-      final decodedList = jsonDecode(historyData) as List<dynamic>;
-      
-      _testHistory = decodedList
-          .map((item) => TestResult.fromJson(item as Map<String, dynamic>))
-          .toList();
+    final url = Uri.parse('$_baseUrl/api/category/$categoryId/detail');
+    try {
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        final List<dynamic> questionList = responseData['questions'] ?? [];
+        return questionList.map((json) => QuestionQuiz.fromJson(json)).toList();
+      } else {
+        return [];
+      }
+    } catch (e) {
+      print('Error fetching questions for category $categoryId: $e');
+      return [];
     }
   }
-
-  /// Adds a new test result to the in-memory list and saves the updated
-  /// list to the device's persistent storage.
+  
+  /// Saves a completed test result to the device's local storage.
   static Future<void> saveTestResult(TestResult result) async {
-    _testHistory.add(result);
     final prefs = await SharedPreferences.getInstance();
-    final historyData = jsonEncode(
-      _testHistory.map((test) => test.toJson()).toList(),
-    );
-    await prefs.setString(_historyKey, historyData);
+    
+    // FIX: Read the latest history from storage first to prevent overwriting.
+    final List<String> historyJson = prefs.getStringList('test_history') ?? [];
+    List<TestResult> currentHistory = historyJson.map((res) => TestResult.fromJson(jsonDecode(res))).toList();
+
+    // Add the new result to the top of the list we just loaded.
+    currentHistory.insert(0, result);
+
+    // Update the in-memory list for the UI to use immediately.
+    testHistory = currentHistory;
+    
+    // Convert the updated list back to JSON strings.
+    List<String> newHistoryJson = currentHistory.map((res) => jsonEncode(res.toJson())).toList();
+    
+    // Save the complete, updated list back to storage.
+    await prefs.setStringList('test_history', newHistoryJson);
   }
 
-  /// Returns a hardcoded list of top users for the leaderboard.
-  static List<Map<String, dynamic>> getTopUsers() {
-    return [
-      {"name": "Rayford", "score": 1250},
-      {"name": "Willard", "score": 1100},
-      {"name": "Hannah", "score": 980},
-      {"name": "Geoffrey", "score": 950},
-      {"name": "Laverne", "score": 900},
-      {"name": "Darrin", "score": 850},
-      {"name": "Mckenzie", "score": 800},
-      {"name": "Kirsten", "score": 750},
-      {"name": "Lester", "score": 700},
-      {"name": "Rae", "score": 650},
-    ];
-  }
-
-  /// Returns a hardcoded list of quiz categories with names, icons, images,
-  /// and question counts to match the new UI design.
-  static List<QuizCategory> getQuizCategories() {
-    return const [
-      QuizCategory(
-        name: "General Knowledge",
-        icon: Icons.work,
-        image: 'assets/general_knowledge.jpg', // Replace with your image asset
-        questionCount: 16,
-      ),
-      QuizCategory(
-        name: "Advanced Math",
-        icon: Icons.lightbulb,
-        image: 'assets/math.jpg', // Replace with your image asset
-        questionCount: 10,
-      ),
-      QuizCategory(
-        name: "Personlity Test",
-        icon: Icons.science,
-        image: 'assets/personality_test.jpg', // Replace with your image asset
-        questionCount: 20,
-      ),
-      QuizCategory(
-        name: "World History",
-        icon: Icons.history_edu,
-        image: 'assets/history.jpg', // Replace with your image asset
-        questionCount: 15,
-      ),
-    ];
+  /// Loads the test history from local storage into the in-memory list.
+  static Future<void> loadHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final historyJson = prefs.getStringList('test_history');
+    
+    if (historyJson != null) {
+      testHistory = historyJson.map((resString) => TestResult.fromJson(jsonDecode(resString))).toList();
+    }
   }
 }

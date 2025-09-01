@@ -1,19 +1,23 @@
 // main.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'providers/language_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/main_screen.dart';
 import 'services/auth_service.dart';
-import 'services/quiz_service.dart'; 
+import 'services/quiz_service.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Load user session first
-  await AuthService.tryAutoLogin();
-  
-  // 2. Load test history right after
   await QuizService.loadHistory();
   
-  runApp(const MyApp());
+  runApp(
+    // Wrap the entire app in the provider
+    ChangeNotifierProvider(
+      create: (context) => LanguageProvider(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -27,9 +31,20 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: AuthService.currentUser != null
-          ? const MainScreen()
-          : const LoginScreen(),
+      home: FutureBuilder<bool>(
+        future: AuthService.tryAutoLogin(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+          if (snapshot.hasData && snapshot.data == true) {
+            return const MainScreen();
+          }
+          return const LoginScreen();
+        },
+      ),
       debugShowCheckedModeBanner: false,
     );
   }

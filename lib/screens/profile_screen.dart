@@ -2,9 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/auth_service.dart';
-import '../models/user.dart';
+import '../services/profile_service.dart';
+import '../models/user_profile.dart';
 import 'auth/login_screen.dart';
-import 'edit_profile_screen.dart'; // Import the new screen
+import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -14,31 +15,44 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  // Controllers for the change password dialog
-  final _currentPasswordController = TextEditingController();
+  late Future<UserProfile?> _userProfileFuture;
   final _newPasswordController = TextEditingController();
 
-  void _changePassword() {
+  @override
+  void initState() {
+    super.initState();
+    _loadUserProfile();
+  }
+
+  void _loadUserProfile() {
+    _userProfileFuture = ProfileService.getProfile();
+  }
+
+  Future<void> _changePassword() async {
+    final newPassword = _newPasswordController.text;
+    if (newPassword.isEmpty) return;
+
+    final success = await ProfileService.changePassword(newPassword);
+
+    if (!mounted) return;
+
+    Navigator.of(context).pop(); // Close the dialog
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(success ? 'Password changed successfully' : 'Failed to change password')),
+    );
+    _newPasswordController.clear();
+  }
+
+  void _showChangePasswordDialog() {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           title: Text('Change Password', style: GoogleFonts.poppins()),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: _currentPasswordController,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'Current Password'),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _newPasswordController,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'New Password'),
-              ),
-            ],
+          content: TextField(
+            controller: _newPasswordController,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: 'New Password'),
           ),
           actions: [
             TextButton(
@@ -46,14 +60,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: const Text('Cancel'),
             ),
             TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Password changed successfully')),
-                );
-                _currentPasswordController.clear();
-                _newPasswordController.clear();
-              },
+              onPressed: _changePassword,
               child: const Text('Change'),
             ),
           ],
@@ -63,6 +70,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _logout() {
+    // This function remains largely the same
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -92,13 +100,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = AuthService.currentUser;
-    if (user == null) {
-      // This should ideally not be reached if routing is handled correctly,
-      // but it's a safe fallback.
-      return const LoginScreen();
-    }
-
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 247, 250, 255),
       appBar: AppBar(
@@ -112,23 +113,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Column(
-            children: [
-              const SizedBox(height: 20),
-              _buildHeader(user),
-              const SizedBox(height: 30),
-              _buildActionMenu(),
-            ],
-          ),
-        ),
+      body: FutureBuilder<UserProfile?>(
+        future: _userProfileFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          } else if (snapshot.hasError || !snapshot.hasData || snapshot.data == null) {
+            return Center(
+              child: Text(
+                'Could not load profile.',
+                style: GoogleFonts.poppins(),
+              ),
+            );
+          }
+
+          final user = snapshot.data!;
+          return RefreshIndicator(
+            onRefresh: () async {
+              setState(() {
+                _loadUserProfile();
+              });
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 20),
+                    _buildHeader(user),
+                    const SizedBox(height: 30),
+                    _buildActionMenu(user),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildHeader(User user) {
+  Widget _buildHeader(UserProfile user) {
     const Color primaryColor = Color.fromRGBO(106, 90, 224, 1);
     return Container(
       padding: const EdgeInsets.all(20),
@@ -145,13 +171,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       child: Column(
         children: [
-          CircleAvatar(
+          const CircleAvatar(
             radius: 50,
-            backgroundImage: AssetImage('assets/avatar.png'), // Replace with user's profile picture
+            backgroundImage: AssetImage('assets/avatar.png'), 
           ),
           const SizedBox(height: 12),
           Text(
-            user.name,
+            user.fullName,
             style: GoogleFonts.poppins(
               fontSize: 22,
               fontWeight: FontWeight.bold,
@@ -160,52 +186,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            user.email,
+            '+${user.countryCode} ${user.phone}',
             style: GoogleFonts.poppins(
               fontSize: 16,
               color: Colors.white.withOpacity(0.8),
             ),
-          ),
-          const SizedBox(height: 20),
-          const Divider(color: Colors.white24),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildStatItem('Score', user.totalScore.toString()),
-              _buildStatItem('Tests', user.totalTestsTaken.toString()),
-              _buildStatItem('Rank', '#${user.leagueRanking}'),
-            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatItem(String label, String value) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: GoogleFonts.poppins(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            color: Colors.white.withOpacity(0.8),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionMenu() {
+  Widget _buildActionMenu(UserProfile user) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -227,18 +219,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => const EditProfileScreen(),
+                  builder: (context) => EditProfileScreen(userProfile: user),
                 ),
-              ).then((_) {
-                // Refresh the profile screen when returning from edit screen
-                setState(() {});
+              ).then((value) {
+                // Refresh profile data when returning from the edit screen
+                if (value == true) {
+                  setState(() {
+                    _loadUserProfile();
+                  });
+                }
               });
             },
           ),
           _buildMenuListItem(
             label: 'Change Password',
             icon: Icons.lock_outline,
-            onPressed: _changePassword,
+            onPressed: _showChangePasswordDialog,
           ),
           _buildMenuListItem(
             label: 'Logout',
@@ -257,6 +253,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required VoidCallback onPressed,
     bool isLast = false,
   }) {
+    // This widget's code remains the same as it's for UI layout
     return Material(
       color: Colors.transparent,
       child: InkWell(

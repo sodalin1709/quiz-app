@@ -1,7 +1,7 @@
 // screens/test_history_screen.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart'; // For date formatting
+import 'package:intl/intl.dart';
 import '../services/quiz_service.dart';
 import '../models/test_result.dart';
 import 'test_detail_screen.dart';
@@ -18,17 +18,19 @@ class _TestHistoryScreenState extends State<TestHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Dynamically get categories from the test history
+    // Data is now read synchronously from the static list in QuizService,
+    // which was populated from SharedPreferences when the app started.
+    final List<TestResult> fullHistory = QuizService.testHistory;
+
+    // Dynamically get categories from the loaded test history
     final List<String> categories = [
       'All',
-      ...QuizService.testHistory.map((test) => test.category).toSet().toList()
+      ...fullHistory.map((test) => test.category).toSet().toList()
     ];
 
     final List<TestResult> filteredHistory = _selectedCategory == 'All'
-        ? QuizService.testHistory
-        : QuizService.testHistory
-            .where((test) => test.category == _selectedCategory)
-            .toList();
+        ? fullHistory
+        : fullHistory.where((test) => test.category == _selectedCategory).toList();
 
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 247, 250, 255),
@@ -43,64 +45,75 @@ class _TestHistoryScreenState extends State<TestHistoryScreen> {
             color: Colors.black87,
           ),
         ),
-        actions: [
-          // Styled Filter Dropdown
-          Padding(
-            padding: const EdgeInsets.only(right: 12.0),
-            child: Container(
-              width: 150,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selectedCategory,
-                  isExpanded: true,
-                  icon: const Icon(Icons.filter_list, color: Colors.black54),
-                  borderRadius: BorderRadius.circular(12),
-                  elevation: 4,
-                  dropdownColor: Colors.white,
-                  items: categories.map((String category) {
-                    return DropdownMenuItem<String>(
-                      value: category,
-                      child: Text(
-                        category,
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          color: Colors.black87,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+      ),
+      body: Column(
+        children: [
+          // Build the filter dropdown only if there's history to filter
+          if (fullHistory.isNotEmpty) _buildFilterDropdown(categories),
+          
+          // Display the correct view based on history content
+          Expanded(
+            child: fullHistory.isEmpty
+                ? _buildEmptyState()
+                : filteredHistory.isEmpty
+                    ? _buildEmptyState(isFiltered: true)
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+                        itemCount: filteredHistory.length,
+                        itemBuilder: (context, index) {
+                          TestResult test = filteredHistory[index];
+                          return _buildHistoryCard(context, test);
+                        },
                       ),
-                    );
-                  }).toList(),
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      _selectedCategory = newValue!;
-                    });
-                  },
-                ),
-              ),
-            ),
           ),
         ],
       ),
-      body: filteredHistory.isEmpty
-          ? _buildEmptyState()
-          : ListView.builder(
-              padding: const EdgeInsets.fromLTRB(20, 30, 20, 20),
-              itemCount: filteredHistory.length,
-              itemBuilder: (context, index) {
-                TestResult test = filteredHistory[index];
-                return _buildHistoryCard(context, test);
-              },
-            ),
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildFilterDropdown(List<String> categories) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: _selectedCategory,
+            isExpanded: true,
+            icon: const Icon(Icons.filter_list, color: Colors.black54),
+            borderRadius: BorderRadius.circular(12),
+            items: categories.map((String category) {
+              return DropdownMenuItem<String>(
+                value: category,
+                child: Text(
+                  category,
+                  style: GoogleFonts.poppins(fontSize: 14, color: Colors.black87),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).toList(),
+            onChanged: (String? newValue) {
+              if (newValue != null) {
+                // Check if the new value is actually in the list before setting state
+                if (categories.contains(newValue)) {
+                  setState(() {
+                    _selectedCategory = newValue;
+                  });
+                }
+              }
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState({bool isFiltered = false}) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -112,7 +125,7 @@ class _TestHistoryScreenState extends State<TestHistoryScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            'No Test History',
+            isFiltered ? 'No History for this Category' : 'No Test History',
             style: GoogleFonts.poppins(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -121,7 +134,8 @@ class _TestHistoryScreenState extends State<TestHistoryScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Complete a quiz to see your results here.',
+            isFiltered ? 'Try selecting another category.' : 'Complete a quiz to see your results here.',
+            textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
               fontSize: 14,
               color: Colors.grey.shade500,
@@ -133,7 +147,7 @@ class _TestHistoryScreenState extends State<TestHistoryScreen> {
   }
 
   Widget _buildHistoryCard(BuildContext context, TestResult test) {
-    double percentageValue = (test.score / test.totalQuestions);
+    double percentageValue = test.totalQuestions > 0 ? (test.score / test.totalQuestions) : 0.0;
     int percentageInt = (percentageValue * 100).toInt();
     
     Color progressColor;
@@ -161,7 +175,6 @@ class _TestHistoryScreenState extends State<TestHistoryScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
-            // MODIFIED: Changed shadow color and style for consistency
             BoxShadow(
               color: const Color.fromRGBO(106, 90, 224, 1).withOpacity(0.1),
               blurRadius: 10,
@@ -171,7 +184,6 @@ class _TestHistoryScreenState extends State<TestHistoryScreen> {
         ),
         child: Row(
           children: [
-            // Circular Progress Indicator for Score
             SizedBox(
               width: 50,
               height: 50,
@@ -198,7 +210,6 @@ class _TestHistoryScreenState extends State<TestHistoryScreen> {
               ),
             ),
             const SizedBox(width: 16),
-            // Test Details
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -237,7 +248,6 @@ class _TestHistoryScreenState extends State<TestHistoryScreen> {
     );
   }
 }
-
 
 
 

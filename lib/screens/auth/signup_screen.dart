@@ -1,9 +1,8 @@
 // screens/auth/signup_screen.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'set_password_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../services/auth_service.dart';
-import '../main_screen.dart';
 import 'login_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -15,59 +14,60 @@ class SignUpScreen extends StatefulWidget {
 
 class _SignUpScreenState extends State<SignUpScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _schoolController = TextEditingController();
-  final _ageController = TextEditingController();
-  String? _selectedGender;
-  bool _isLoading = false;
+  final _phoneController = TextEditingController();
+  final _otpController = TextEditingController();
+  final String _countryCode = '855';
 
-  Future<void> _signUp() async {
-    if (!_formKey.currentState!.validate()) {
+  bool _isOtpSending = false;
+  bool _otpSent = false;
+
+  Future<void> _sendOtp() async {
+    // Validate phone number before sending
+    if (_phoneController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a phone number.')),
+      );
       return;
     }
+    setState(() => _isOtpSending = true);
 
-    setState(() {
-      _isLoading = true;
-    });
-
-    final age = int.tryParse(_ageController.text);
-
-    bool success = await AuthService.signUp(
-      _nameController.text,
-      _emailController.text,
-      _passwordController.text,
-      _schoolController.text,
-      age!,
-      _selectedGender!,
-    );
+    bool success = await AuthService.sendOtp(_countryCode, _phoneController.text);
 
     if (!mounted) return;
-
     setState(() {
-      _isLoading = false;
+      _isOtpSending = false;
+      if (success) {
+        _otpSent = true;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('OTP sent successfully!')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to send OTP. Please try again.')),
+        );
+      }
     });
-
-    if (success) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const MainScreen()),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sign up failed. Please try again.')),
-      );
-    }
   }
-  
+
+  void _proceedToNextStep() {
+    if (!_formKey.currentState!.validate()) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SetPasswordScreen(
+          countryCode: _countryCode,
+          phone: _phoneController.text,
+          otp: _otpController.text,
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
-    _schoolController.dispose();
-    _ageController.dispose();
+    _phoneController.dispose();
+    _otpController.dispose();
     super.dispose();
   }
 
@@ -94,50 +94,27 @@ class _SignUpScreenState extends State<SignUpScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Create Account',
-                    style: GoogleFonts.poppins(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
+                  Text('Create Account', style: GoogleFonts.poppins(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black87)),
                   const SizedBox(height: 8),
-                  Text(
-                    'Sign up to get started!',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
+                  Text('Enter your phone to get started!', style: GoogleFonts.poppins(fontSize: 16, color: Colors.grey.shade600)),
                   const SizedBox(height: 40),
-                  _buildTextField(label: 'Full Name', controller: _nameController),
-                  _buildTextField(label: 'Email', controller: _emailController, keyboardType: TextInputType.emailAddress),
-                  _buildTextField(label: 'Password', controller: _passwordController, obscureText: true),
-                  _buildTextField(label: 'School', controller: _schoolController),
-                  _buildTextField(label: 'Age', controller: _ageController, keyboardType: TextInputType.number),
-                  _buildGenderDropdown(),
+                  
+                  _buildPhoneNumberInput(),
+
+                  if (_otpSent)
+                    _buildTextField(label: 'OTP Code', controller: _otpController, keyboardType: TextInputType.number),
+                  
                   const SizedBox(height: 30),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _isLoading ? null : _signUp,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryColor,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: _isLoading
+                      onPressed: _isOtpSending ? null : (_otpSent ? _proceedToNextStep : _sendOtp),
+                      style: ElevatedButton.styleFrom(backgroundColor: primaryColor, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                      child: _isOtpSending
                           ? const CircularProgressIndicator(color: Colors.white)
                           : Text(
-                              'Sign Up',
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
+                              _otpSent ? 'Verify & Next' : 'Send OTP',
+                              style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
                             ),
                     ),
                   ),
@@ -147,18 +124,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     children: [
                       Text("Already have an account?", style: GoogleFonts.poppins()),
                       TextButton(
-                        onPressed: () {
-                           Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(builder: (context) => const LoginScreen())
-                          );
-                        },
-                        child: Text(
-                          'Login',
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.bold,
-                            color: primaryColor,
-                          ),
+                        onPressed: () => Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(builder: (context) => const LoginScreen()),
                         ),
+                        child: Text('Login', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: primaryColor)),
                       ),
                     ],
                   ),
@@ -170,78 +139,58 @@ class _SignUpScreenState extends State<SignUpScreen> {
       ),
     );
   }
-
-  Widget _buildTextField({
-    required String label,
-    required TextEditingController controller,
-    bool obscureText = false,
-    TextInputType keyboardType = TextInputType.text,
-  }) {
+  
+  Widget _buildPhoneNumberInput() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10.0),
       child: TextFormField(
-        controller: controller,
-        obscureText: obscureText,
-        keyboardType: keyboardType,
+        controller: _phoneController,
+        keyboardType: TextInputType.phone,
+        enabled: !_otpSent, // Disable after sending OTP
         decoration: InputDecoration(
-          labelText: label,
-          labelStyle: GoogleFonts.poppins(color: Colors.grey.shade600),
+          labelText: 'Phone Number',
+          prefixIcon: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 16, 10, 16),
+            child: Text(
+              '+$_countryCode',
+              style: GoogleFonts.poppins(fontSize: 16, color: Colors.black54),
+            ),
+          ),
           filled: true,
-          fillColor: const Color.fromARGB(255, 255, 255, 255),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color.fromRGBO(106, 90, 224, 1)),
-          ),
+          fillColor: _otpSent ? Colors.grey.shade200 : Colors.white,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color.fromRGBO(106, 90, 224, 1))),
         ),
         validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please enter your $label';
-          }
+          if (value == null || value.isEmpty) return 'Please enter your phone number';
           return null;
         },
       ),
     );
   }
 
-  // MODIFIED: This widget is updated to have a clean dropdown style
-  Widget _buildGenderDropdown() {
+  Widget _buildTextField({required String label, required TextEditingController controller, TextInputType keyboardType = TextInputType.text}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10.0),
-      child: DropdownButtonFormField<String>(
-        value: _selectedGender,
-        hint: Text('Select Gender', style: GoogleFonts.poppins(color: Colors.grey.shade600)),
+      child: TextFormField(
+        controller: controller,
+        keyboardType: keyboardType,
         decoration: InputDecoration(
+          labelText: label,
+          labelStyle: GoogleFonts.poppins(color: Colors.grey.shade600),
           filled: true,
-          fillColor: const Color.fromRGBO(255, 255, 255, 1),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
+          fillColor: Colors.white,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color.fromRGBO(106, 90, 224, 1))),
         ),
-        borderRadius: BorderRadius.circular(12),
-        elevation: 4,
-        dropdownColor: const Color.fromRGBO(255, 255, 255, 1),
-        items: ['Male', 'Female', 'Other']
-            .map((gender) => DropdownMenuItem(
-                  value: gender,
-                  child: Text(gender, style: GoogleFonts.poppins()),
-                ))
-            .toList(),
-        onChanged: (value) {
-          setState(() {
-            _selectedGender = value;
-          });
+        validator: (value) {
+          if (value == null || value.isEmpty) return 'Please enter the $label';
+          return null;
         },
-        validator: (value) => value == null ? 'Please select a gender' : null,
       ),
     );
   }
 }
-
 
 
 

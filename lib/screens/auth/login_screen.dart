@@ -15,29 +15,24 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
+  final String _countryCode = '855'; // Hardcoded as per the example
   bool _isLoading = false;
 
   Future<void> _login() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
     
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     bool success = await AuthService.login(
-      _emailController.text,
+      _countryCode,
+      _phoneController.text,
       _passwordController.text,
     );
 
     if (!mounted) return;
-
-    setState(() {
-      _isLoading = false;
-    });
+    setState(() => _isLoading = false);
 
     if (success) {
       Navigator.pushReplacement(
@@ -53,7 +48,7 @@ class _LoginScreenState extends State<LoginScreen> {
   
   @override
   void dispose() {
-    _emailController.dispose();
+    _phoneController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -92,8 +87,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 50),
-                  _buildTextField(label: 'Email', controller: _emailController),
-                  _buildTextField(label: 'Password', controller: _passwordController, obscureText: true),
+                  _buildPhoneNumberInput(),
+                  _buildTextField(
+                    label: 'Password',
+                    controller: _passwordController,
+                    obscureText: true
+                  ),
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
@@ -164,6 +163,42 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  Widget _buildPhoneNumberInput() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10.0),
+      child: TextFormField(
+        controller: _phoneController,
+        keyboardType: TextInputType.phone,
+        decoration: InputDecoration(
+          labelText: 'Phone Number',
+          prefixIcon: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 16, 10, 16),
+            child: Text(
+              '+$_countryCode',
+              style: GoogleFonts.poppins(fontSize: 16, color: Colors.black54),
+            ),
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color.fromRGBO(106, 90, 224, 1)),
+          ),
+        ),
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'Please enter your phone number';
+          }
+          return null;
+        },
+      ),
+    );
+  }
+
   Widget _buildTextField({
     required String label,
     required TextEditingController controller,
@@ -178,12 +213,12 @@ class _LoginScreenState extends State<LoginScreen> {
           labelText: label,
           labelStyle: GoogleFonts.poppins(color: Colors.grey.shade600),
           filled: true,
-          fillColor: const Color.fromARGB(255, 255, 255, 255),
+          fillColor: Colors.white,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide.none,
           ),
-           focusedBorder: OutlineInputBorder(
+            focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: Color.fromRGBO(106, 90, 224, 1)),
           ),
@@ -198,8 +233,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-
-
 
 
 
